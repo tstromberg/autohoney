@@ -32,12 +32,12 @@ type SavedInstance struct {
 }
 
 // Instance() converts a SavedInstance into a normal Instance.
-func (s SavedInstance) Instance() autohoney.Instance {
-	return autohoney.Instance{
+func (s SavedInstance) Instance() Instance {
+	return Instance{
 		Id:                 s.Id,
 		Name:               s.Name,
 		Image:              s.Image,
-		Recipes:            strings.Split(s.Recipes, ','),
+		Recipes:            strings.Split(s.Recipes, ","),
 		CreationTime:       s.CreationTime,
 		StartTime:          s.StartTime,
 		FirstInterceptTime: s.FirstInterceptTime,
