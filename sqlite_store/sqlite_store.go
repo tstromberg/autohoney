@@ -9,20 +9,24 @@ import (
 	"github.com/tstromberg/autohoney/objects"
 
 	"github.com/jmoiron/sqlx"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 // SQL statements to create a new database.
 var schema = `
 CREATE TABLE instances (
-	id int,
-	uuid text,
-	name text,
-	image text,
-	recipes text,
-	creation_time timestamp,
-	start_time timestamp,
-	first_timestampercept_time timestamp,
-	end_time timestamp
+	id INTEGER PRIMARY KEY,
+	name TEXT,
+
+	provider TEXT,
+	provider_id TEXT,
+
+	image TEXT,
+	recipes TEXT,
+
+	creation_time TIMESTAMP,
+	start_time TIMESTAMP,
+	stop_time TIMESTAMP
 )
 `
 
@@ -84,10 +88,17 @@ func (s *Store) Open() (*Store, error) {
 	return s, nil
 }
 
-func (s *Store) ListInstances() (instances []objects.Instance, err error) {
-	log.Printf("ListInstances ...")
-	instance := objects.SavedInstance{}
-	rows, err := s.db.Queryx("SELECT * FROM instances")
+// queryInstance queries the instance table for an id (or 0 for everything).
+func (s *Store) QueryInstances(q objects.InstanceQuery) (instances []objects.Instance, err error) {
+	instance := objects.FlatInstance{}
+	query := "SELECT id, name, image, recipes FROM instances"
+	var rows *sqlx.Rows
+
+	if q.Id != 0 {
+		rows, err = s.db.Queryx(query+" WHERE id=:id", q.Id)
+	} else {
+		rows, err = s.db.Queryx(query)
+	}
 	if err != nil {
 		return
 	}
@@ -95,21 +106,20 @@ func (s *Store) ListInstances() (instances []objects.Instance, err error) {
 		rows.StructScan(&instance)
 		instances = append(instances, instance.Instance())
 	}
-	log.Printf("ListInstances return: %v", instances)
 	return
 }
 
-func (b *Store) AddInstance(i objects.Instance) error {
-	log.Printf("AddInstances %v", i)
-	return nil
+// AddInstance adds an instance.
+func (s *Store) AddInstance(i objects.Instance) error {
+	log.Printf("AddInstance %v", i)
+	result, err := s.db.NamedExec(`INSERT INTO instances (name, image) VALUES (:name, :image)`, i)
+	log.Printf("result: %V", result)
+	return err
 }
 
-func (b *Store) UpdateInstance(i objects.Instance) error {
-	log.Printf("UpdateInstances %v", i)
-	return nil
-}
-
-func (b *Store) DeleteInstance(i objects.Instance) error {
+// DeleteInstance deletes an instance.
+func (s *Store) DeleteInstance(i objects.Instance) error {
 	log.Printf("DeleteInstance %v", i)
-	return nil
+	_, err := s.db.NamedExec(`DELETE FROM instances WHERE id=:id`, i)
+	return err
 }

@@ -3,14 +3,18 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 
-	"github.com/tstromberg/autohoney/sqlite_store"
+	// This over-engineered store is designed to be replaceable.
+	"github.com/tstromberg/autohoney/objects"
+	store "github.com/tstromberg/autohoney/sqlite_store"
 
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/zenazn/goji"
+	"github.com/zenazn/goji/web"
 )
 
 var (
@@ -18,41 +22,77 @@ var (
 	StoragePath = os.ExpandEnv("$HOME/.autohoney/sqlite.db")
 
 	// Global storage object
-	Store *sqlite_store.Store
+	Store *store.Store
 
 	// Address to listen on.
 	ListenAddress = ":8181"
 )
 
-// hello world, the web server
-func InstancesHandler(w http.ResponseWriter, req *http.Request) {
-	var response []byte
+// ListInstances handles GET /instances/ and /instances/:id
+func ListInstances(c web.C, w http.ResponseWriter, req *http.Request) {
+	id, err := strconv.Atoi(c.URLParams["id"])
+	q := objects.InstanceQuery{}
+	if err != nil {
+		q.Id = id
+	}
 
-	instances, err := Store.ListInstances()
+	var response []byte
+	instances, err := Store.QueryInstances(q)
 	if err == nil {
 		response, err = json.Marshal(instances)
 	}
 	if err != nil {
-		log.Print(err)
-		response = []byte(fmt.Sprintf(`{ "error": "%s" }`, err))
+		http.Error(w, err.Error(), 500)
+		return
 	}
+	w.Header().Set("Content-Type", "application/json")
 	w.Write(response)
+}
+
+// AddInstance handles POST /instances/
+func AddInstance(c web.C, w http.ResponseWriter, req *http.Request) {
+	var i objects.Instance
+	body, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	err = json.Unmarshal(body, &i)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if i.Name == "" {
+		http.Error(w, "Missing required field: name", http.StatusBadRequest)
+		return
+	}
+	if i.Image == "" {
+		http.Error(w, "Missing required field: image", http.StatusBadRequest)
+		return
+	}
+
+	err = Store.AddInstance(i)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Error(w, "Everything is awesome", http.StatusCreated)
 }
 
 func main() {
 	// Get the storage object setup.
-	s, err := sqlite_store.NewStore(StoragePath)
+	s, err := store.NewStore(StoragePath)
 	if err != nil {
 		log.Fatal(err)
 	}
 	Store = s
 
-	http.HandleFunc("/instances", InstancesHandler)
-
 	log.Printf("Listening at %s ...", ListenAddress)
+	goji.Get("/instances", ListInstances)
+	goji.Get("/instances/:id", ListInstances)
+	goji.Post("/instances", AddInstance)
 
-	err = http.ListenAndServe(ListenAddress, nil)
-	if err != nil {
-		log.Fatal("ListenAndServe: ", err)
-	}
+	goji.Serve()
 }

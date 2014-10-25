@@ -18,8 +18,13 @@ type Instance struct {
 	EndTime            time.Time
 }
 
+// Filters for an instance query
+type InstanceQuery struct {
+	Id int
+}
+
 // Structure defining how an Instance object may look flattened into a database.
-type SavedInstance struct {
+type FlatInstance struct {
 	Id    int
 	Name  string
 	Image string
@@ -31,8 +36,8 @@ type SavedInstance struct {
 	EndTime            time.Time
 }
 
-// Instance() converts a SavedInstance into a normal Instance.
-func (s SavedInstance) Instance() Instance {
+// Instance() converts a FlatInstance into a normal Instance.
+func (s FlatInstance) Instance() Instance {
 	return Instance{
 		Id:                 s.Id,
 		Name:               s.Name,
